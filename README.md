@@ -1,32 +1,25 @@
-# JJS Studio
+# JJS Studio (Android)
 
-Convert Roblox `.rbxl` / `.rbxm` / `.rbxlx` / `.rbxmx` ParticleEmitters, MeshParts, Cameras and Sounds into JJS skill JSON + `KLUv` import codes. Edit the live JSON in the Editor tab.
-
-Parsing stays in the browser. Place files are never uploaded.
+Roblox Particle & Effect Converter, Timeline Sequencer, and KLUv Bytecode Generator for Jujutsu Shenanigans (JJS). Built natively for Android using Kotlin and Jetpack Compose with a sleek pitch-black aesthetic and white accents.
 
 ## Features
 
-- Explorer for nested models / folders
-- Particle conversion with flipbook / emit-count / spread sanitizing
-- Mesh VISUAL nodes from MeshPart / SpecialMesh
-- Camera VISUAL nodes sequenced with WAIT
-- SFX nodes from Sound instances
-- Beams show in the explorer only (JJS cannot play them)
-- Pack mode, recolor, duration / position overrides
-- Import editor: branch tabs, drag-swap, Default swap caches the original name
-- Live JSON edits — zstd compresses only on Export / Copy
-- Paste `KLUv/` or raw JSON
-
-## Publish
-
-1. Upload this folder to the **repo root**.
-2. Pages → Deploy from branch → `/ (root)`.
-3. Put `CircularSpotifyText-Black.otf` in `fonts/` if you have it.
-
-## Editor notes
-
-- Click a timeline node to inspect it. Click again to deselect (stats + add buttons return).
-- Double-click a named branch tab to swap it with Default. Swap back restores the cached name.
-- Drag one named tab onto another to swap their lines.
-- Mesh inspector uses the Mesh field list. Camera inspector uses the Camera field list.
-- Node icon URLs live on `window.JJS_NODE_ICONS` in `index.html`.
+- **Built Lean. Built to Last**: Ultra-fast native Android application with dark cybernetic aesthetic inspired by modern minimalist developer tools.
+- **Conversion Engine**:
+  - Convert Roblox ParticleEmitters, MeshParts, Cameras, and Sounds into JJS JSON & Zstandard `KLUv/...` bytecode.
+  - Skill name, trigger key slot, duration, and 3D offset parameters.
+  - Pack mode and Branch mode compiler flags.
+  - Color palette detection and dynamic recoloring engine.
+- **Timeline & Branch Editor**:
+  - Interactive multi-branch sequencing (`Default`, custom branches).
+  - Sequence 8 node types: `PARTICLE`, `VISUAL_MESH`, `VISUAL_CAMERA`, `SFX`, `WAIT`, `CONNECT`, `TAG`, `BRANCH`.
+  - Inspector card to live-edit textures, emission rates, velocities, colors, sounds, and delays.
+- **Roblox Explorer**:
+  - Searchable hierarchy tree for Models, Folders, Particles, Meshes, Cameras, Sounds, and Beams.
+  - Direct import into active skill timelines.
+- **Authentic JJS Presets Included**:
+  - Hollow Purple (Satoru Gojo)
+  - Malevolent Shrine & Dismantle (Ryomen Sukuna)
+  - Black Flash (Kokusen)
+  - Flame Arrow (Fuga)
+  - World Cutting Slash

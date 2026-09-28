@@ -1,0 +1,6 @@
+{
+  "name": "JJS Studio",
+  "description": "Roblox effect & particle converter and timeline editor for Jujutsu Shenanigans (JJS) with sleek dark UI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
