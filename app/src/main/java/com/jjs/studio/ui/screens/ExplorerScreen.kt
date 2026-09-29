@@ -1,5 +1,10 @@
 package com.jjs.studio.ui.screens
 
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,20 +15,22 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.jjs.studio.model.NodeKind
 import com.jjs.studio.model.RobloxInstance
 import com.jjs.studio.ui.components.SleekCard
 import com.jjs.studio.ui.theme.*
@@ -37,59 +44,285 @@ fun ExplorerScreen(
     onShowStatus: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
-    var selectedInstance by remember { mutableStateOf<RobloxInstance?>(null) }
+    var selectedFilter by remember { mutableStateOf<String?>(null) } // null=All, or "ParticleEmitter", "MeshPart", "Sound"
 
-    // If no explorer root loaded, construct a representative Roblox place tree
-    val root = remember(uiState.explorerRoot) {
-        uiState.explorerRoot ?: createSampleRobloxTree()
-    }
-
-    val flattenedList = remember(root, searchQuery) {
-        flattenTree(root).filter {
-            if (searchQuery.isBlank()) true
-            else it.name.contains(searchQuery, ignoreCase = true) || it.className.contains(searchQuery, ignoreCase = true)
+    // File opener launcher for multiple .rbxl, .rbxm, .rbxlx, .rbxmx files
+    val fileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            try {
+                val loadedFiles = mutableListOf<Pair<String, ByteArray>>()
+                for (uri in uris) {
+                    var fileName = "RobloxAsset.rbxm"
+                    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (nameIdx != -1 && cursor.moveToFirst()) {
+                            fileName = cursor.getString(nameIdx)
+                        }
+                    }
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val bytes = inputStream?.readBytes() ?: ByteArray(0)
+                    if (bytes.isNotEmpty()) {
+                        loadedFiles.add(fileName to bytes)
+                    }
+                }
+                if (loadedFiles.isNotEmpty()) {
+                    viewModel.loadMultipleRobloxFiles(loadedFiles)
+                } else {
+                    onShowStatus("No valid files selected")
+                }
+            } catch (e: Exception) {
+                onShowStatus("Failed to open files: ${e.message}")
+            }
         }
     }
 
-    Box(
+    val root = uiState.explorerRoot
+
+    val flattenedList = remember(root, searchQuery, selectedFilter) {
+        if (root == null) emptyList()
+        else {
+            flattenTree(root).filter { inst ->
+                val matchesFilter = selectedFilter == null || inst.className.equals(selectedFilter, ignoreCase = true)
+                val matchesSearch = if (searchQuery.isBlank()) true
+                else inst.name.contains(searchQuery, ignoreCase = true) || inst.className.contains(searchQuery, ignoreCase = true)
+                matchesFilter && matchesSearch
+            }
+        }
+    }
+
+    val selectedInstance = viewModel.selectedExplorerInstance
+
+    LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(BlackBackground)
+            .background(Color.Transparent)
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // Header
+        // Header
+        item {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "ROBLOX FX EXPLORER",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MutedGray,
+                    letterSpacing = 1.2.sp
+                )
+                Text(
+                    text = "Asset & FX Hierarchy",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    color = StarkWhite
+                )
+                Spacer(Modifier.height(12.dp))
+
+                // Shiny Open File Action Banner
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xEE0F121A), Color(0xEE090B10))
+                            )
+                        )
+                        .border(
+                            BorderStroke(
+                                1.dp,
+                                Brush.linearGradient(
+                                    listOf(Color(0xFF384357), Color(0xFF1E222D), Color(0xFF38BDF8).copy(alpha = 0.5f))
+                                )
+                            ),
+                            RoundedCornerShape(18.dp)
+                        )
+                        .padding(16.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF1C2230)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(20.dp))
+                            }
+                            Column {
+                                Text(
+                                    text = if (uiState.loadedFileName != null) uiState.loadedFileName!! else "Load Roblox Place / Model",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = StarkWhite
+                                )
+                                Text(
+                                    text = "Supported: .rbxl • .rbxm • .rbxlx • .rbxmx",
+                                    fontSize = 11.sp,
+                                    color = MutedGray
+                                )
+                            }
+                        }
+
+                        // Camera & Mesh Parsing Toggles (matching gate in original app)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF07090E))
+                                .border(BorderStroke(1.dp, Color(0xFF1E222D)), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Parse Options:",
+                                fontSize = 11.sp,
+                                color = MutedGray,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = uiState.parseMeshes,
+                                    onClick = { viewModel.updateSkillSettings(parseMeshes = !uiState.parseMeshes) },
+                                    label = { Text("Meshes", fontSize = 11.sp) },
+                                    leadingIcon = {
+                                        Icon(
+                                            if (uiState.parseMeshes) Icons.Default.Check else Icons.Default.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Color(0xFF1E2538),
+                                        selectedLabelColor = StarkWhite,
+                                        selectedLeadingIconColor = Color(0xFF38BDF8),
+                                        containerColor = Color(0xFF0D0F16),
+                                        labelColor = SubtleGray
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        borderColor = if (uiState.parseMeshes) Color(0xFF38BDF8) else Color(0xFF1E222D),
+                                        enabled = true,
+                                        selected = uiState.parseMeshes
+                                    )
+                                )
+                                FilterChip(
+                                    selected = uiState.parseCameras,
+                                    onClick = { viewModel.updateSkillSettings(parseCameras = !uiState.parseCameras) },
+                                    label = { Text("Cameras", fontSize = 11.sp) },
+                                    leadingIcon = {
+                                        Icon(
+                                            if (uiState.parseCameras) Icons.Default.Check else Icons.Default.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Color(0xFF1E2538),
+                                        selectedLabelColor = StarkWhite,
+                                        selectedLeadingIconColor = Color(0xFF38BDF8),
+                                        containerColor = Color(0xFF0D0F16),
+                                        labelColor = SubtleGray
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        borderColor = if (uiState.parseCameras) Color(0xFF38BDF8) else Color(0xFF1E222D),
+                                        enabled = true,
+                                        selected = uiState.parseCameras
+                                    )
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { fileLauncher.launch("*/*") },
+                                colors = ButtonDefaults.buttonColors(containerColor = StarkWhite),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .weight(1.2f)
+                                    .testTag("explorer_open_file_btn")
+                            ) {
+                                Icon(Icons.Default.FileOpen, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("OPEN / MULTI-SELECT", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                            }
+
+                            if (root != null) {
+                                Button(
+                                    onClick = { viewModel.convertAllExplorerFxToSkill() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2330)),
+                                    border = BorderStroke(1.dp, Color(0xFF384357)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("explorer_convert_all_fx_btn")
+                                ) {
+                                    Icon(Icons.Default.AutoFixHigh, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("CONVERT ALL", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = StarkWhite)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (root == null) {
+            // Empty State
             item {
-                Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 40.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF0F121A))
+                            .border(1.dp, Color(0xFF222838), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.AccountTree, contentDescription = null, tint = Color(0xFF64748B), modifier = Modifier.size(28.dp))
+                    }
                     Text(
-                        text = "ROBLOX EXPLORER",
-                        fontSize = 11.sp,
+                        text = "No Roblox Asset Loaded",
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MutedGray,
-                        letterSpacing = 1.2.sp
-                    )
-                    Text(
-                        text = "Instance Hierarchy",
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Black,
                         color = StarkWhite
                     )
-                    Spacer(Modifier.height(8.dp))
-
-                    // Search Input
+                    Text(
+                        text = "Tap 'Open File' above to browse and parse any Roblox .rbxl place or .rbxm model to extract ParticleEmitters, Meshes, and Sounds.",
+                        fontSize = 12.sp,
+                        color = MutedGray,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
+                }
+            }
+        } else {
+            // Search & Filter Toolbar
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
-                        placeholder = { Text("Search instances (e.g. ParticleEmitter, Sound)", fontSize = 12.sp, color = SubtleGray) },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = MutedGray, modifier = Modifier.size(18.dp))
-                        },
+                        placeholder = { Text("Filter instances...", fontSize = 12.sp, color = SubtleGray) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MutedGray, modifier = Modifier.size(18.dp)) },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
                                 IconButton(onClick = { searchQuery = "" }) {
@@ -102,157 +335,168 @@ fun ExplorerScreen(
                             .testTag("explorer_search_input"),
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = StarkWhite,
+                            focusedContainerColor = CardBackground,
+                            unfocusedContainerColor = CardBackground,
+                            focusedBorderColor = Color(0xFF384357),
                             unfocusedBorderColor = BorderSubtle,
                             focusedTextColor = StarkWhite,
-                            unfocusedTextColor = StarkWhite,
-                            focusedContainerColor = Color(0xFF0C0D12),
-                            unfocusedContainerColor = Color(0xFF0C0D12)
+                            unfocusedTextColor = StarkWhite
                         ),
                         singleLine = true
                     )
+
+                    // Filter Chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(null to "All", "ParticleEmitter" to "Particles", "MeshPart" to "Meshes", "Camera" to "Cameras", "Sound" to "SFX").forEach { (filterVal, label) ->
+                            val isSelected = selectedFilter == filterVal
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { selectedFilter = if (isSelected) null else filterVal },
+                                label = { Text(label, fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF222838),
+                                    selectedLabelColor = StarkWhite,
+                                    containerColor = Color(0xFF0F1117),
+                                    labelColor = MutedGray
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    borderColor = if (isSelected) Color(0xFF38BDF8) else Color(0xFF1E222D),
+                                    enabled = true,
+                                    selected = isSelected
+                                )
+                            )
+                        }
+                    }
                 }
             }
 
-            // Instance Inspector Sheet (if selected)
+            // Instance Tree List
+            items(flattenedList, key = { it.id }) { inst ->
+                val isSelected = selectedInstance?.id == inst.id
+                ExplorerRowItem(
+                    instance = inst,
+                    isSelected = isSelected,
+                    onClick = { viewModel.selectExplorerInstance(inst.id) }
+                )
+            }
+
+            // Property Inspector if selected
             if (selectedInstance != null) {
                 item {
-                    val inst = selectedInstance!!
-                    SleekCard(testTag = "instance_inspector_card") {
+                    SleekCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        testTag = "explorer_inspector_card"
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = inst.className.uppercase(),
+                                    text = "SELECTED INSTANCE",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = JjsAccentPink,
+                                    color = Color(0xFF38BDF8),
                                     letterSpacing = 1.sp
                                 )
                                 Text(
-                                    text = inst.name,
+                                    text = selectedInstance.name,
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = StarkWhite
                                 )
+                                Text(
+                                    text = "Class: ${selectedInstance.className} • ${selectedInstance.children.size} children",
+                                    fontSize = 11.sp,
+                                    color = MutedGray
+                                )
                             }
-                            IconButton(onClick = { selectedInstance = null }) {
-                                Icon(Icons.Default.Close, contentDescription = "Close", tint = MutedGray)
+
+                            Button(
+                                onClick = { viewModel.convertSelectedInstanceToSkill() },
+                                colors = ButtonDefaults.buttonColors(containerColor = StarkWhite),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text("Convert Branch", fontSize = 11.sp, color = Color.Black, fontWeight = FontWeight.Bold)
                             }
                         }
 
                         Spacer(Modifier.height(10.dp))
+                        HorizontalDivider(color = Color(0xFF1E222D), thickness = 0.8.dp)
+                        Spacer(Modifier.height(10.dp))
 
-                        if (inst.properties.isNotEmpty()) {
-                            Text("PROPERTIES", fontSize = 10.sp, color = SubtleGray, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.height(4.dp))
-                            inst.properties.entries.take(6).forEach { (k, v) ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 2.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(k, fontSize = 11.sp, color = MutedGray)
-                                    Text(
-                                        v,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 11.sp,
-                                        color = StarkWhite,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                        // Properties List
+                        if (selectedInstance.properties.isEmpty()) {
+                            Text("No additional properties stored", fontSize = 11.sp, color = SubtleGray)
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                selectedInstance.properties.forEach { (k, v) ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(k, fontSize = 11.sp, color = MutedGray, fontFamily = FontFamily.Monospace)
+                                        Text(v, fontSize = 11.sp, color = StarkWhite, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
                                 }
                             }
-                            Spacer(Modifier.height(12.dp))
-                        }
-
-                        // Convert to Node Action
-                        Button(
-                            onClick = {
-                                when (inst.className) {
-                                    "ParticleEmitter" -> viewModel.addNode(NodeKind.PARTICLE)
-                                    "MeshPart", "SpecialMesh" -> viewModel.addNode(NodeKind.VISUAL_MESH)
-                                    "Camera" -> viewModel.addNode(NodeKind.VISUAL_CAMERA)
-                                    "Sound" -> viewModel.addNode(NodeKind.SFX)
-                                    else -> viewModel.addNode(NodeKind.PARTICLE)
-                                }
-                                onShowStatus("Added '${inst.name}' to timeline")
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = StarkWhite, contentColor = BlackBackground),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Import to Current Skill", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
-            }
-
-            // Results count
-            item {
-                Text(
-                    text = "DISCOVERED INSTANCES (${flattenedList.size})",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MutedGray,
-                    letterSpacing = 1.sp
-                )
-            }
-
-            // INSTANCE ROWS
-            items(flattenedList) { item ->
-                val isSelected = selectedInstance?.id == item.id
-                InstanceRow(
-                    instance = item,
-                    isSelected = isSelected,
-                    onClick = { selectedInstance = if (isSelected) null else item }
-                )
             }
         }
     }
 }
 
 @Composable
-private fun InstanceRow(
+private fun ExplorerRowItem(
     instance: RobloxInstance,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val shape = RoundedCornerShape(12.dp)
-    val dotColor = when (instance.className) {
-        "ParticleEmitter" -> Color(0xFFF7D7F8)
-        "MeshPart", "SpecialMesh" -> Color(0xFFFF6BB5)
-        "Camera" -> Color(0xFFC45EC8)
-        "Sound" -> Color(0xFF7DFFB3)
-        "Beam" -> Color(0xFF6EA8FF)
-        else -> Color(0xFFFFFFFF)
+    val bg = if (isSelected) Color(0xFF171B26) else Color(0xFF0A0C11)
+    val border = if (isSelected) Color(0xFF38BDF8) else Color(0xFF161922)
+
+    val icon = when (instance.className) {
+        "ParticleEmitter" -> Icons.Default.Grain
+        "MeshPart", "SpecialMesh" -> Icons.Default.Category
+        "Camera" -> Icons.Default.Videocam
+        "Sound" -> Icons.AutoMirrored.Filled.VolumeUp
+        "Attachment" -> Icons.Default.Adjust
+        "Model" -> Icons.Default.FolderSpecial
+        "Folder" -> Icons.Default.Folder
+        else -> Icons.Default.DataObject
+    }
+
+    val iconTint = when (instance.className) {
+        "ParticleEmitter" -> Color(0xFFF43F5E)
+        "MeshPart", "SpecialMesh" -> Color(0xFF38BDF8)
+        "Camera" -> Color(0xFFA855F7)
+        "Sound" -> Color(0xFF22C55E)
+        else -> Color(0xFF94A3B8)
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(if (isSelected) Color(0xFF1B1E28) else Color(0xFF0C0D12))
-            .border(BorderStroke(1.dp, if (isSelected) StarkWhite else BorderSubtle), shape)
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .border(BorderStroke(1.dp, border), RoundedCornerShape(12.dp))
             .clickable { onClick() }
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Class Indicator Dot
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(dotColor)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(18.dp)
         )
-
-        Spacer(Modifier.width(12.dp))
-
+        Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = instance.name,
@@ -265,103 +509,30 @@ private fun InstanceRow(
             Text(
                 text = instance.className,
                 fontSize = 10.sp,
-                color = MutedGray
+                color = MutedGray,
+                fontFamily = FontFamily.Monospace
             )
         }
-
         if (instance.children.isNotEmpty()) {
             Text(
-                text = "${instance.children.size} items",
-                fontSize = 10.sp,
-                color = SubtleGray
+                text = "${instance.children.size}",
+                fontSize = 11.sp,
+                color = SubtleGray,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF141720))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
             )
         }
-
-        Spacer(Modifier.width(8.dp))
-
-        Icon(
-            imageVector = Icons.Default.ChevronRight,
-            contentDescription = null,
-            tint = SubtleGray,
-            modifier = Modifier.size(16.dp)
-        )
     }
 }
 
 private fun flattenTree(root: RobloxInstance): List<RobloxInstance> {
     val list = mutableListOf<RobloxInstance>()
-    fun walk(inst: RobloxInstance) {
+    fun traverse(inst: RobloxInstance) {
         list.add(inst)
-        inst.children.forEach { walk(it) }
+        inst.children.forEach { traverse(it) }
     }
-    walk(root)
+    traverse(root)
     return list
-}
-
-private fun createSampleRobloxTree(): RobloxInstance {
-    val workspace = RobloxInstance(name = "Workspace", className = "Workspace")
-
-    val purpleModel = RobloxInstance(name = "HollowPurpleRig", className = "Model")
-    purpleModel.children.add(
-        RobloxInstance(
-            name = "BlueCompressionParticle",
-            className = "ParticleEmitter",
-            properties = mapOf("Texture" to "rbxassetid://5859188448", "Rate" to "45", "Speed" to "25", "Color" to "50, 120, 255")
-        )
-    )
-    purpleModel.children.add(
-        RobloxInstance(
-            name = "RedReversalParticle",
-            className = "ParticleEmitter",
-            properties = mapOf("Texture" to "rbxassetid://5859188448", "Rate" to "40", "Speed" to "22", "Color" to "255, 40, 70")
-        )
-    )
-    purpleModel.children.add(
-        RobloxInstance(
-            name = "PurpleCoreMesh",
-            className = "MeshPart",
-            properties = mapOf("MeshId" to "rbxassetid://6023773194", "Size" to "6, 6, 6")
-        )
-    )
-    purpleModel.children.add(
-        RobloxInstance(
-            name = "SingularityBlastSound",
-            className = "Sound",
-            properties = mapOf("SoundId" to "rbxassetid://9114387890", "Volume" to "1.2")
-        )
-    )
-    purpleModel.children.add(
-        RobloxInstance(
-            name = "ShakeCamera",
-            className = "Camera",
-            properties = mapOf("FieldOfView" to "60")
-        )
-    )
-
-    val shrineFolder = RobloxInstance(name = "MalevolentShrineFX", className = "Folder")
-    shrineFolder.children.add(
-        RobloxInstance(
-            name = "DismantleCrescent",
-            className = "SpecialMesh",
-            properties = mapOf("MeshId" to "rbxassetid://4815162342", "Size" to "8, 0.2, 3")
-        )
-    )
-    shrineFolder.children.add(
-        RobloxInstance(
-            name = "BloodBurstEmitter",
-            className = "ParticleEmitter",
-            properties = mapOf("Texture" to "rbxassetid://5859188448", "Rate" to "60", "Speed" to "30")
-        )
-    )
-    shrineFolder.children.add(
-        RobloxInstance(
-            name = "TearSlashAudio",
-            className = "Sound",
-            properties = mapOf("SoundId" to "rbxassetid://9114384455", "Volume" to "1.1")
-        )
-    )
-
-    workspace.children.add(purpleModel)
-    workspace.children.add(shrineFolder)
-    return workspace
 }

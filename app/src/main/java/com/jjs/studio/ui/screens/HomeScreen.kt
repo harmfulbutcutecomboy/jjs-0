@@ -1,5 +1,7 @@
 package com.jjs.studio.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,26 +40,31 @@ fun HomeScreen(
     uiState: JjsUiState,
     onNavigate: (AppScreen) -> Unit,
     onSelectSkill: (Int) -> Unit,
+    onCreateNewSkill: () -> Unit,
     onOpenImport: () -> Unit,
     onOpenExport: () -> Unit,
     onShowStatus: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val clipboard: ClipboardManager = LocalClipboardManager.current
+    val currentSkill = uiState.skills.getOrNull(uiState.currentSkillIndex)
+    val activeNodes = currentSkill?.branches?.get(uiState.currentBranch)
+        ?: currentSkill?.branches?.get("Default")
+        ?: emptyList()
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(BlackBackground)
+            .background(Color.Transparent)
     ) {
-        // Subtle dot matrix in upper background
+        // Subtle cybernetic dot matrix
         DotMatrixGrid(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(380.dp),
+                .height(340.dp),
             dotSpacing = 32f,
             dotRadius = 1.2f,
-            dotColor = Color(0xFF161822)
+            dotColor = Color(0xFF141722)
         )
 
         LazyColumn(
@@ -65,24 +72,41 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            // HERO SECTION (barred.cc aesthetic)
+            // HERO TITLE & 3D VIEWPORT
             item {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    GlowingBadge(
-                        icon = Icons.Default.ViewInAr,
-                        size = 64.dp,
-                        iconSize = 30.dp,
-                        contentDescription = "JJS 3D Cube Icon"
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(Color(0xFF38BDF8), Color(0xFF818CF8))
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.ViewInAr, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                        }
+                        Text(
+                            text = "JJS STUDIO • 3D ENGINE",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF94A3B8),
+                            letterSpacing = 1.2.sp
+                        )
+                    }
 
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(8.dp))
 
                     Text(
                         text = "Built lean.\nBuilt to last.",
@@ -94,359 +118,310 @@ fun HomeScreen(
                         letterSpacing = (-0.5).sp
                     )
 
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(8.dp))
 
                     Text(
-                        text = "Roblox FX to Jujutsu Shenanigans bytecode converter. Parse ParticleEmitters, Meshes, and SFX directly into KLUv bytecode.",
-                        fontSize = 13.sp,
+                        text = "Roblox FX parser & KLUv bytecode compiler. Parse ParticleEmitters, Meshes, and SFX directly into Jujutsu Shenanigans.",
+                        fontSize = 12.sp,
                         color = MutedGray,
                         textAlign = TextAlign.Center,
                         lineHeight = 18.sp,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp)
                     )
 
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(16.dp))
 
-                    // Quick Action Buttons
+                    // 3D Interactive Viewport Component
+                    Cyber3DViewport(
+                        nodes = activeNodes,
+                        modifier = Modifier.testTag("cyber_3d_viewport")
+                    )
+                }
+            }
+
+            // QUICK ACCESS CARDS (2x2 Grid)
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Button(
-                            onClick = onOpenImport,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
-                                .testTag("home_import_button"),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = StarkWhite,
-                                contentColor = BlackBackground
-                            )
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Load / Paste", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        }
+                        // Roblox Explorer Opener Card
+                        QuickToolCard(
+                            title = "Roblox Opener",
+                            subtitle = ".rbxl / .rbxm / XML",
+                            icon = Icons.Default.FolderOpen,
+                            accentColor = Color(0xFF38BDF8),
+                            onClick = { onNavigate(AppScreen.EXPLORER) },
+                            modifier = Modifier.weight(1f),
+                            testTag = "home_card_explorer"
+                        )
 
-                        OutlinedButton(
+                        // Import Code Editor Card
+                        QuickToolCard(
+                            title = "Code Editor",
+                            subtitle = "JSON & KLUv Bytecode",
+                            icon = Icons.Default.Code,
+                            accentColor = Color(0xFFC084FC),
+                            onClick = { onNavigate(AppScreen.CODE_EDITOR) },
+                            modifier = Modifier.weight(1f),
+                            testTag = "home_card_code_editor"
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Timeline Sequencer Card
+                        QuickToolCard(
+                            title = "Timeline",
+                            subtitle = "${activeNodes.size} Sequence Nodes",
+                            icon = Icons.Default.Timeline,
+                            accentColor = Color(0xFF22C55E),
                             onClick = { onNavigate(AppScreen.EDITOR) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp)
-                                .testTag("home_editor_button"),
-                            shape = RoundedCornerShape(14.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderMedium),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = StarkWhite
-                            )
-                        ) {
-                            Icon(Icons.Default.Timeline, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Open Editor", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                        }
+                            modifier = Modifier.weight(1f),
+                            testTag = "home_card_timeline"
+                        )
+
+                        // Compiler Card
+                        QuickToolCard(
+                            title = "Converter",
+                            subtitle = "Recolor & Flags",
+                            icon = Icons.Default.SwapHoriz,
+                            accentColor = Color(0xFFF43F5E),
+                            onClick = { onNavigate(AppScreen.CONVERT) },
+                            modifier = Modifier.weight(1f),
+                            testTag = "home_card_convert"
+                        )
                     }
                 }
             }
 
-            // STATS ROW (Bento cards)
+            // COMPILER OUTPUT PREVIEW CARD
             item {
-                Row(
+                SleekCard(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    testTag = "home_pipeline_card"
                 ) {
-                    val current = uiState.skills.getOrNull(uiState.currentSkillIndex)
-                    StatCard(
-                        title = "SKILLS",
-                        value = "${uiState.skills.size}",
-                        subtitle = "Loaded in memory",
-                        modifier = Modifier.weight(1f)
-                    )
-                    StatCard(
-                        title = "NODES",
-                        value = "${current?.totalNodesCount ?: 0}",
-                        subtitle = "Active branch nodes",
-                        modifier = Modifier.weight(1f)
-                    )
-                    StatCard(
-                        title = "KEY",
-                        value = "${current?.key ?: 1}",
-                        subtitle = "Trigger bind slot",
-                        modifier = Modifier.weight(1f)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "ACTIVE SKILL COMPILER",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF38BDF8),
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                text = currentSkill?.name ?: "Custom_Skill",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = StarkWhite
+                            )
+                            Text(
+                                text = "Slot [${currentSkill?.key ?: 1}] • ${currentSkill?.duration ?: 2.0}s duration",
+                                fontSize = 11.sp,
+                                color = MutedGray
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                if (uiState.liveKluv.isNotBlank()) {
+                                    clipboard.setText(AnnotatedString(uiState.liveKluv))
+                                    onShowStatus("Copied KLUv bytecode")
+                                }
+                            },
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E2330))
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy KLUv", tint = StarkWhite, modifier = Modifier.size(16.dp))
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Code Output Preview
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF040608))
+                            .border(BorderStroke(1.dp, Color(0xFF181C26)), RoundedCornerShape(10.dp))
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = if (uiState.liveKluv.isNotBlank()) uiState.liveKluv else "// No bytecode compiled",
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            color = Color(0xFF818CF8),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 
-            // LIVE BYTECODE PIPELINE CARD (barred.cc aesthetic: You type -> We store)
+            // SKILLS IN WORKSPACE
             item {
-                Column(
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Column {
                         Text(
-                            text = "COMPILER PIPELINE",
-                            fontSize = 11.sp,
+                            text = "WORKSPACE SKILLS",
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = MutedGray,
                             letterSpacing = 1.sp
                         )
-                        Spacer(Modifier.weight(1f))
                         Text(
-                            text = "Auto-synced",
-                            fontSize = 11.sp,
-                            color = JjsNeonGreen
+                            text = "${uiState.skills.size} Active Skill(s)",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black,
+                            color = StarkWhite
                         )
                     }
 
-                    // Input block ("You type")
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF0C0D12))
-                            .border(androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle), RoundedCornerShape(16.dp))
-                            .padding(14.dp)
+                    Button(
+                        onClick = onCreateNewSkill,
+                        colors = ButtonDefaults.buttonColors(containerColor = StarkWhite),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.testTag("home_create_skill_btn")
                     ) {
-                        Column {
-                            Text(
-                                text = "Active Skill Name",
-                                fontSize = 11.sp,
-                                color = SubtleGray,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = uiState.skillName.ifEmpty { "converted_vfx" },
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = StarkWhite
-                            )
-                        }
-                    }
-
-                    // Flow Arrow
-                    FlowArrowDivider()
-
-                    // Output block ("We store / KLUv")
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF0C0D12))
-                            .border(androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle), RoundedCornerShape(16.dp))
-                            .padding(14.dp)
-                    ) {
-                        Column {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Generated JJS KLUv Bytecode",
-                                    fontSize = 11.sp,
-                                    color = SubtleGray,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Spacer(Modifier.weight(1f))
-                                IconButton(
-                                    onClick = {
-                                        clipboard.setText(AnnotatedString(uiState.liveKluv))
-                                        onShowStatus("Copied KLUv code to clipboard!")
-                                    },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.ContentCopy,
-                                        contentDescription = "Copy KLUv",
-                                        tint = StarkWhite,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = if (uiState.liveKluv.length > 80) uiState.liveKluv.take(80) + "…" else uiState.liveKluv,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
-                                color = Color(0xFFD6C8E8),
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("New Skill", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                     }
                 }
             }
 
-            // PRESETS LIBRARY HEADER
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "PRESET SKILLS",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MutedGray,
-                        letterSpacing = 1.sp
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        text = "${uiState.skills.size} available",
-                        fontSize = 11.sp,
-                        color = SubtleGray
-                    )
-                }
-            }
-
-            // PRESET ITEMS
+            // Skills List
             itemsIndexed(uiState.skills) { index, skill ->
                 val isSelected = index == uiState.currentSkillIndex
-                PresetSkillCard(
-                    skill = skill,
-                    isSelected = isSelected,
-                    onClick = {
-                        onSelectSkill(index)
-                        onShowStatus("Selected '${skill.name}'")
-                    },
-                    onOpenInEditor = {
-                        onSelectSkill(index)
-                        onNavigate(AppScreen.EDITOR)
-                    }
-                )
-            }
-        }
-    }
-}
+                val border = if (isSelected) Color(0xFF38BDF8) else Color(0xFF181C26)
+                val bg = if (isSelected) Color(0xFF11141E) else Color(0xFF090B10)
 
-@Composable
-private fun StatCard(
-    title: String,
-    value: String,
-    subtitle: String,
-    modifier: Modifier = Modifier
-) {
-    val shape = RoundedCornerShape(16.dp)
-    Column(
-        modifier = modifier
-            .clip(shape)
-            .background(Color(0xFF0C0D12))
-            .border(androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle), shape)
-            .padding(12.dp)
-    ) {
-        Text(
-            text = title,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            color = SubtleGray,
-            letterSpacing = 0.5.sp
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = value,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Black,
-            color = StarkWhite
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = subtitle,
-            fontSize = 9.sp,
-            color = MutedGray,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun PresetSkillCard(
-    skill: JjsSkill,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onOpenInEditor: () -> Unit
-) {
-    val shape = RoundedCornerShape(18.dp)
-    val borderColor = if (isSelected) StarkWhite else BorderSubtle
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(if (isSelected) Color(0xFF14161F) else Color(0xFF0C0D12))
-            .border(androidx.compose.foundation.BorderStroke(1.dp, borderColor), shape)
-            .clickable { onClick() }
-            .padding(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1A1C24))
-                    .border(androidx.compose.foundation.BorderStroke(1.dp, BorderMedium), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Bolt,
-                    contentDescription = null,
-                    tint = if (isSelected) JjsAccentPink else StarkWhite,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Spacer(Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = skill.name,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = StarkWhite
-                )
-                Text(
-                    text = "Key ${skill.key} · ${skill.duration}s · ${skill.branches.size} branch(es) · ${skill.totalNodesCount} nodes",
-                    fontSize = 11.sp,
-                    color = MutedGray
-                )
-            }
-
-            if (isSelected) {
-                Box(
+                Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF2B2E3C))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(bg)
+                        .border(BorderStroke(1.dp, border), RoundedCornerShape(14.dp))
+                        .clickable { onSelectSkill(index) }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("ACTIVE", fontSize = 9.sp, fontWeight = FontWeight.Black, color = StarkWhite)
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF181D29)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "${skill.key}",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 14.sp,
+                            color = if (isSelected) Color(0xFF38BDF8) else StarkWhite
+                        )
+                    }
+
+                    Spacer(Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = skill.name,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = StarkWhite
+                        )
+                        Text(
+                            text = "${skill.branches.size} branch(es) • ${skill.branches.values.sumOf { it.size }} nodes",
+                            fontSize = 11.sp,
+                            color = MutedGray
+                        )
+                    }
+
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFF38BDF8).copy(alpha = 0.2f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text("ACTIVE", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF38BDF8))
+                        }
+                    }
                 }
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(
-                onClick = onOpenInEditor,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+@Composable
+private fun QuickToolCard(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    accentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String
+) {
+    Box(
+        modifier = modifier
+            .testTag(testTag)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF0F1218), Color(0xFF07090D))
+                )
+            )
+            .border(
+                BorderStroke(
+                    1.dp,
+                    Brush.linearGradient(
+                        listOf(Color(0xFF262C3A), Color(0xFF131720), accentColor.copy(alpha = 0.4f))
+                    )
+                ),
+                RoundedCornerShape(16.dp)
+            )
+            .clickable { onClick() }
+            .padding(14.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF161B24)),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(14.dp), tint = StarkWhite)
-                Spacer(Modifier.width(4.dp))
-                Text("Edit in Timeline", fontSize = 12.sp, color = StarkWhite, fontWeight = FontWeight.SemiBold)
+                Icon(icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
             }
+            Text(
+                text = title,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = StarkWhite
+            )
+            Text(
+                text = subtitle,
+                fontSize = 10.sp,
+                color = MutedGray,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

@@ -256,6 +256,13 @@ fun FloatingCapsuleHeader(
                 onClick = { onScreenSelect(AppScreen.EXPLORER) },
                 testTag = "nav_tab_explorer"
             )
+            NavTabItem(
+                label = "Code",
+                icon = Icons.Default.Code,
+                selected = currentScreen == AppScreen.CODE_EDITOR,
+                onClick = { onScreenSelect(AppScreen.CODE_EDITOR) },
+                testTag = "nav_tab_code"
+            )
         }
     }
 }

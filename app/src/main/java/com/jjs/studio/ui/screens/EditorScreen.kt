@@ -51,7 +51,7 @@ fun EditorScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(BlackBackground)
+            .background(Color.Transparent)
     ) {
         LazyColumn(
             modifier = Modifier
@@ -562,6 +562,94 @@ private fun NodeInspectorCard(
                     colors = inspectorTextFieldColors(),
                     singleLine = true
                 )
+                Spacer(Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = node.size,
+                        onValueChange = { s -> viewModel.updateSelectedNode { it.size = s } },
+                        label = { Text("Size Sequence", fontSize = 11.sp) },
+                        modifier = Modifier.weight(1.2f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = inspectorTextFieldColors(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = node.emitCount.toString(),
+                        onValueChange = { it.toIntOrNull()?.let { ec -> viewModel.updateSelectedNode { n -> n.emitCount = ec } } },
+                        label = { Text("Emit Count", fontSize = 11.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(0.8f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = inspectorTextFieldColors(),
+                        singleLine = true
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = node.lifetimeRange,
+                        onValueChange = { lr -> viewModel.updateSelectedNode { it.lifetimeRange = lr } },
+                        label = { Text("Lifetime Range", fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = inspectorTextFieldColors(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = node.zOffset.toString(),
+                        onValueChange = { it.toDoubleOrNull()?.let { z -> viewModel.updateSelectedNode { n -> n.zOffset = z } } },
+                        label = { Text("Z-Offset", fontSize = 11.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = inspectorTextFieldColors(),
+                        singleLine = true
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = node.spreadAngle,
+                        onValueChange = { sa -> viewModel.updateSelectedNode { it.spreadAngle = sa } },
+                        label = { Text("Spread Angle", fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = inspectorTextFieldColors(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = node.flipbookSize,
+                        onValueChange = { fs -> viewModel.updateSelectedNode { it.flipbookSize = fs } },
+                        label = { Text("Flipbook Size", fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = inspectorTextFieldColors(),
+                        singleLine = true
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = node.lightEmission.toString(),
+                        onValueChange = { it.toDoubleOrNull()?.let { le -> viewModel.updateSelectedNode { n -> n.lightEmission = le } } },
+                        label = { Text("Light Emission", fontSize = 11.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = inspectorTextFieldColors(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = node.brightness.toString(),
+                        onValueChange = { it.toDoubleOrNull()?.let { b -> viewModel.updateSelectedNode { n -> n.brightness = b } } },
+                        label = { Text("Brightness", fontSize = 11.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = inspectorTextFieldColors(),
+                        singleLine = true
+                    )
+                }
             }
             NodeKind.VISUAL_MESH -> {
                 OutlinedTextField(

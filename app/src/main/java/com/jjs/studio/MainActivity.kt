@@ -13,10 +13,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.jjs.studio.ui.components.AnimatedSpaceBackground
 import com.jjs.studio.ui.components.FloatingCapsuleHeader
 import com.jjs.studio.ui.dialogs.AddNodeModalSheet
 import com.jjs.studio.ui.dialogs.ExportModalSheet
 import com.jjs.studio.ui.dialogs.ImportModalSheet
+import com.jjs.studio.ui.screens.CodeEditorScreen
 import com.jjs.studio.ui.screens.ConvertScreen
 import com.jjs.studio.ui.screens.EditorScreen
 import com.jjs.studio.ui.screens.ExplorerScreen
@@ -85,6 +87,9 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .padding(innerPadding)
                     ) {
+                        // Ambient Animated Starfield & Space Background
+                        AnimatedSpaceBackground()
+
                         AnimatedContent(
                             targetState = uiState.currentScreen,
                             transitionSpec = {
@@ -97,7 +102,8 @@ class MainActivity : ComponentActivity() {
                                     uiState = uiState,
                                     onNavigate = { viewModel.setScreen(it) },
                                     onSelectSkill = { viewModel.selectSkill(it) },
-                                    onOpenImport = { viewModel.toggleImportSheet(true) },
+                                    onCreateNewSkill = { viewModel.createNewSkill() },
+                                    onOpenImport = { viewModel.setScreen(AppScreen.CODE_EDITOR) },
                                     onOpenExport = { viewModel.toggleExportSheet(true) },
                                     onShowStatus = { viewModel.showStatus(it) }
                                 )
@@ -112,6 +118,11 @@ class MainActivity : ComponentActivity() {
                                     onShowStatus = { viewModel.showStatus(it) }
                                 )
                                 AppScreen.EXPLORER -> ExplorerScreen(
+                                    uiState = uiState,
+                                    viewModel = viewModel,
+                                    onShowStatus = { viewModel.showStatus(it) }
+                                )
+                                AppScreen.CODE_EDITOR -> CodeEditorScreen(
                                     uiState = uiState,
                                     viewModel = viewModel,
                                     onShowStatus = { viewModel.showStatus(it) }

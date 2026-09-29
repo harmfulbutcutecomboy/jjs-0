@@ -44,7 +44,7 @@ fun ConvertScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(BlackBackground)
+            .background(Color.Transparent)
     ) {
         LazyColumn(
             modifier = Modifier
@@ -171,13 +171,24 @@ fun ConvertScreen(
                         onCheckedChange = { viewModel.updateSkillSettings(packMode = it) }
                     )
 
+                    if (uiState.packMode) {
+                        HorizontalDivider(color = Color(0xFF181A22), modifier = Modifier.padding(vertical = 10.dp))
+
+                        SleekToggleRow(
+                            title = "Branch Mode",
+                            subtitle = "Hosts become named branches of one skill",
+                            checked = uiState.branchMode,
+                            onCheckedChange = { viewModel.updateSkillSettings(branchMode = it) }
+                        )
+                    }
+
                     HorizontalDivider(color = Color(0xFF181A22), modifier = Modifier.padding(vertical = 10.dp))
 
                     SleekToggleRow(
-                        title = "Branch Mode",
-                        subtitle = "Hosts become named branches of one skill",
-                        checked = uiState.branchMode,
-                        onCheckedChange = { viewModel.updateSkillSettings(branchMode = it) }
+                        title = "VFX Section Marking",
+                        subtitle = "Insert CONNECT divider tags between textures",
+                        checked = uiState.sectionMark,
+                        onCheckedChange = { viewModel.updateSkillSettings(sectionMark = it) }
                     )
 
                     HorizontalDivider(color = Color(0xFF181A22), modifier = Modifier.padding(vertical = 10.dp))
