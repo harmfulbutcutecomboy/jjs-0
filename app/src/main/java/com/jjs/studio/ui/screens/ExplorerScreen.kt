@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -31,7 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.jjs.studio.model.RobloxInstance
+import com.jjs.studio.model.VfxTreeNode
 import com.jjs.studio.ui.components.SleekCard
 import com.jjs.studio.ui.theme.*
 import com.jjs.studio.viewmodel.JjsUiState
@@ -46,9 +47,7 @@ fun ExplorerScreen(
 ) {
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf<String?>(null) } // null=All, or "ParticleEmitter", "MeshPart", "Sound"
 
-    // File opener launcher for multiple .rbxl, .rbxm, .rbxlx, .rbxmx files
     val fileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
     ) { uris: List<Uri> ->
@@ -71,8 +70,6 @@ fun ExplorerScreen(
                 }
                 if (loadedFiles.isNotEmpty()) {
                     viewModel.loadMultipleRobloxFiles(loadedFiles)
-                } else {
-                    onShowStatus("No valid files selected")
                 }
             } catch (e: Exception) {
                 onShowStatus("Failed to open files: ${e.message}")
@@ -80,21 +77,36 @@ fun ExplorerScreen(
         }
     }
 
-    val root = uiState.explorerRoot
+    val treeRoot = uiState.vfxTreeRoot
+    val currentNode = uiState.vfxNodeMap[uiState.browseId] ?: treeRoot
 
-    val flattenedList = remember(root, searchQuery, selectedFilter) {
-        if (root == null) emptyList()
+    // Compute breadcrumb path
+    val breadcrumbs = remember(currentNode, uiState.vfxNodeMap) {
+        val crumbs = mutableListOf<VfxTreeNode>()
+        var walk: VfxTreeNode? = currentNode
+        while (walk != null && walk.id != "root") {
+            crumbs.add(0, walk)
+            walk = uiState.vfxNodeMap[walk.parentId]
+        }
+        crumbs
+    }
+
+    // Children of currently browsed node
+    val visibleItems = remember(currentNode, searchQuery) {
+        if (currentNode == null) emptyList()
         else {
-            flattenTree(root).filter { inst ->
-                val matchesFilter = selectedFilter == null || inst.className.equals(selectedFilter, ignoreCase = true)
-                val matchesSearch = if (searchQuery.isBlank()) true
-                else inst.name.contains(searchQuery, ignoreCase = true) || inst.className.contains(searchQuery, ignoreCase = true)
-                matchesFilter && matchesSearch
+            val q = searchQuery.trim().lowercase()
+            if (q.isEmpty()) {
+                currentNode.children
+            } else {
+                currentNode.children.filter {
+                    it.name.lowercase().contains(q) || it.className.lowercase().contains(q)
+                }
             }
         }
     }
 
-    val selectedInstance = viewModel.selectedExplorerInstance
+    val selectedNode = uiState.vfxNodeMap[uiState.selectedVfxNodeId] ?: currentNode
 
     LazyColumn(
         modifier = modifier
@@ -102,9 +114,9 @@ fun ExplorerScreen(
             .background(Color.Transparent)
             .padding(horizontal = 16.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Header
+        // Header & File Loader
         item {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
@@ -115,33 +127,27 @@ fun ExplorerScreen(
                     letterSpacing = 1.2.sp
                 )
                 Text(
-                    text = "Asset & FX Hierarchy",
+                    text = "Hierarchy & VFX Tree",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Black,
                     color = StarkWhite
                 )
                 Spacer(Modifier.height(12.dp))
 
-                // Shiny Open File Action Banner
+                // File Open Card
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(18.dp))
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color(0xEE0F121A), Color(0xEE090B10))
-                            )
-                        )
+                        .background(Brush.verticalGradient(listOf(Color(0xEE0F121A), Color(0xEE090B10))))
                         .border(
                             BorderStroke(
                                 1.dp,
-                                Brush.linearGradient(
-                                    listOf(Color(0xFF384357), Color(0xFF1E222D), Color(0xFF38BDF8).copy(alpha = 0.5f))
-                                )
+                                Brush.linearGradient(listOf(Color(0xFF384357), Color(0xFF1E222D), Color(0xFF38BDF8).copy(alpha = 0.5f)))
                             ),
                             RoundedCornerShape(18.dp)
                         )
-                        .padding(16.dp)
+                        .padding(14.dp)
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(
@@ -150,19 +156,21 @@ fun ExplorerScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(Color(0xFF1C2230)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.FolderOpen, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(18.dp))
                             }
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = if (uiState.loadedFileName != null) uiState.loadedFileName!! else "Load Roblox Place / Model",
-                                    fontSize = 14.sp,
+                                    text = uiState.loadedFileName ?: "Load Roblox Place / Model",
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = StarkWhite
+                                    color = StarkWhite,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = "Supported: .rbxl • .rbxm • .rbxlx • .rbxmx",
@@ -172,7 +180,7 @@ fun ExplorerScreen(
                             }
                         }
 
-                        // Camera & Mesh Parsing Toggles (matching gate in original app)
+                        // Parse options
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -183,23 +191,14 @@ fun ExplorerScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Parse Options:",
-                                fontSize = 11.sp,
-                                color = MutedGray,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("Parse Options:", fontSize = 11.sp, color = MutedGray, fontWeight = FontWeight.Bold)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 FilterChip(
                                     selected = uiState.parseMeshes,
                                     onClick = { viewModel.updateSkillSettings(parseMeshes = !uiState.parseMeshes) },
                                     label = { Text("Meshes", fontSize = 11.sp) },
                                     leadingIcon = {
-                                        Icon(
-                                            if (uiState.parseMeshes) Icons.Default.Check else Icons.Default.Close,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(12.dp)
-                                        )
+                                        Icon(if (uiState.parseMeshes) Icons.Default.Check else Icons.Default.Close, contentDescription = null, modifier = Modifier.size(12.dp))
                                     },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = Color(0xFF1E2538),
@@ -207,11 +206,6 @@ fun ExplorerScreen(
                                         selectedLeadingIconColor = Color(0xFF38BDF8),
                                         containerColor = Color(0xFF0D0F16),
                                         labelColor = SubtleGray
-                                    ),
-                                    border = FilterChipDefaults.filterChipBorder(
-                                        borderColor = if (uiState.parseMeshes) Color(0xFF38BDF8) else Color(0xFF1E222D),
-                                        enabled = true,
-                                        selected = uiState.parseMeshes
                                     )
                                 )
                                 FilterChip(
@@ -219,11 +213,7 @@ fun ExplorerScreen(
                                     onClick = { viewModel.updateSkillSettings(parseCameras = !uiState.parseCameras) },
                                     label = { Text("Cameras", fontSize = 11.sp) },
                                     leadingIcon = {
-                                        Icon(
-                                            if (uiState.parseCameras) Icons.Default.Check else Icons.Default.Close,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(12.dp)
-                                        )
+                                        Icon(if (uiState.parseCameras) Icons.Default.Check else Icons.Default.Close, contentDescription = null, modifier = Modifier.size(12.dp))
                                     },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = Color(0xFF1E2538),
@@ -231,308 +221,264 @@ fun ExplorerScreen(
                                         selectedLeadingIconColor = Color(0xFF38BDF8),
                                         containerColor = Color(0xFF0D0F16),
                                         labelColor = SubtleGray
-                                    ),
-                                    border = FilterChipDefaults.filterChipBorder(
-                                        borderColor = if (uiState.parseCameras) Color(0xFF38BDF8) else Color(0xFF1E222D),
-                                        enabled = true,
-                                        selected = uiState.parseCameras
                                     )
                                 )
                             }
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Button(
+                            onClick = { fileLauncher.launch("*/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = StarkWhite),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().testTag("explorer_open_file_btn")
                         ) {
-                            Button(
-                                onClick = { fileLauncher.launch("*/*") },
-                                colors = ButtonDefaults.buttonColors(containerColor = StarkWhite),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .weight(1.2f)
-                                    .testTag("explorer_open_file_btn")
-                            ) {
-                                Icon(Icons.Default.FileOpen, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("OPEN / MULTI-SELECT", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                            }
-
-                            if (root != null) {
-                                Button(
-                                    onClick = { viewModel.convertAllExplorerFxToSkill() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2330)),
-                                    border = BorderStroke(1.dp, Color(0xFF384357)),
-                                    shape = RoundedCornerShape(12.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("explorer_convert_all_fx_btn")
-                                ) {
-                                    Icon(Icons.Default.AutoFixHigh, contentDescription = null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("CONVERT ALL", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = StarkWhite)
-                                }
-                            }
+                            Icon(Icons.Default.FileOpen, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("OPEN / MULTI-SELECT FILES", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                         }
                     }
                 }
             }
         }
 
-        if (root == null) {
-            // Empty State
+        // HUD & Selection Action Banner (matches HUD from app.js)
+        if (treeRoot != null) {
             item {
-                Column(
+                SleekCard(modifier = Modifier.fillMaxWidth()) {
+                    val pCount = selectedNode?.collectAllParticles()?.size ?: 0
+                    val mCount = selectedNode?.collectAllMeshes()?.size ?: 0
+                    val cCount = selectedNode?.collectAllCameras()?.size ?: 0
+                    val sCount = selectedNode?.collectAllSounds()?.size ?: 0
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = selectedNode?.name ?: "Workspace",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = StarkWhite,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "$pCount particles · $mCount meshes · $cCount cameras · $sCount sounds",
+                                fontSize = 11.sp,
+                                color = Color(0xFF38BDF8)
+                            )
+                        }
+
+                        Button(
+                            onClick = { viewModel.exportCurrentTargets() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF38BDF8)),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text("CONVERT", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+                    }
+                }
+            }
+
+            // Breadcrumbs & Up Button (Matches app.js #explorerPath and '.. up')
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFF0A0C12))
+                        .border(BorderStroke(1.dp, Color(0xFF1E222D)), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (currentNode?.id != "root" && currentNode?.id != treeRoot.id) {
+                        IconButton(
+                            onClick = { viewModel.navigateUpVfxTree() },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Up", tint = StarkWhite, modifier = Modifier.size(16.dp))
+                        }
+                        Spacer(Modifier.width(6.dp))
+                    }
+
+                    Text(
+                        text = if (breadcrumbs.isEmpty()) "Workspace" else "Workspace / " + breadcrumbs.joinToString(" / ") { it.name },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MutedGray,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Text(
+                        text = "${visibleItems.size} items",
+                        fontSize = 11.sp,
+                        color = SubtleGray
+                    )
+                }
+            }
+
+            // Search filter
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search name or class...", fontSize = 12.sp, color = MutedGray) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MutedGray, modifier = Modifier.size(16.dp)) },
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color(0xFF38BDF8),
+                        unfocusedBorderColor = Color(0xFF1E222D),
+                        focusedContainerColor = Color(0xFF080A10),
+                        unfocusedContainerColor = Color(0xFF080A10),
+                        focusedTextColor = StarkWhite,
+                        unfocusedTextColor = StarkWhite
+                    ),
+                    singleLine = true
+                )
+            }
+        }
+
+        // Tree Items
+        if (treeRoot == null) {
+            item {
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 40.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF0F121A))
-                            .border(1.dp, Color(0xFF222838), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.AccountTree, contentDescription = null, tint = Color(0xFF64748B), modifier = Modifier.size(28.dp))
-                    }
                     Text(
-                        text = "No Roblox Asset Loaded",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = StarkWhite
+                        text = "Open an .rbxl / .rbxm file above to explore its VFX hierarchy.",
+                        fontSize = 13.sp,
+                        color = MutedGray
                     )
-                    Text(
-                        text = "Tap 'Open File' above to browse and parse any Roblox .rbxl place or .rbxm model to extract ParticleEmitters, Meshes, and Sounds.",
-                        fontSize = 12.sp,
-                        color = MutedGray,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 24.dp)
-                    )
+                }
+            }
+        } else if (visibleItems.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No VFX instances under this folder.", fontSize = 12.sp, color = SubtleGray)
                 }
             }
         } else {
-            // Search & Filter Toolbar
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("Filter instances...", fontSize = 12.sp, color = SubtleGray) },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MutedGray, modifier = Modifier.size(18.dp)) },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Default.Close, contentDescription = null, tint = MutedGray, modifier = Modifier.size(16.dp))
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("explorer_search_input"),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = CardBackground,
-                            unfocusedContainerColor = CardBackground,
-                            focusedBorderColor = Color(0xFF384357),
-                            unfocusedBorderColor = BorderSubtle,
-                            focusedTextColor = StarkWhite,
-                            unfocusedTextColor = StarkWhite
-                        ),
-                        singleLine = true
-                    )
-
-                    // Filter Chips
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf(null to "All", "ParticleEmitter" to "Particles", "MeshPart" to "Meshes", "Camera" to "Cameras", "Sound" to "SFX").forEach { (filterVal, label) ->
-                            val isSelected = selectedFilter == filterVal
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { selectedFilter = if (isSelected) null else filterVal },
-                                label = { Text(label, fontSize = 11.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color(0xFF222838),
-                                    selectedLabelColor = StarkWhite,
-                                    containerColor = Color(0xFF0F1117),
-                                    labelColor = MutedGray
-                                ),
-                                border = FilterChipDefaults.filterChipBorder(
-                                    borderColor = if (isSelected) Color(0xFF38BDF8) else Color(0xFF1E222D),
-                                    enabled = true,
-                                    selected = isSelected
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Instance Tree List
-            items(flattenedList, key = { it.id }) { inst ->
-                val isSelected = selectedInstance?.id == inst.id
-                ExplorerRowItem(
-                    instance = inst,
-                    isSelected = isSelected,
-                    onClick = { viewModel.selectExplorerInstance(inst.id) }
+            items(visibleItems, key = { it.id }) { itemNode ->
+                VfxTreeRow(
+                    node = itemNode,
+                    isSelected = uiState.selectedVfxNodeId == itemNode.id,
+                    isChecked = uiState.checkedVfxNodeIds.contains(itemNode.id),
+                    onSelect = { viewModel.selectVfxNode(itemNode.id) },
+                    onToggleCheck = { viewModel.toggleCheckVfxNode(itemNode.id) },
+                    onNavigateInto = { viewModel.navigateToVfxNode(itemNode.id) }
                 )
-            }
-
-            // Property Inspector if selected
-            if (selectedInstance != null) {
-                item {
-                    SleekCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        testTag = "explorer_inspector_card"
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "SELECTED INSTANCE",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF38BDF8),
-                                    letterSpacing = 1.sp
-                                )
-                                Text(
-                                    text = selectedInstance.name,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = StarkWhite
-                                )
-                                Text(
-                                    text = "Class: ${selectedInstance.className} • ${selectedInstance.children.size} children",
-                                    fontSize = 11.sp,
-                                    color = MutedGray
-                                )
-                            }
-
-                            Button(
-                                onClick = { viewModel.convertSelectedInstanceToSkill() },
-                                colors = ButtonDefaults.buttonColors(containerColor = StarkWhite),
-                                shape = RoundedCornerShape(10.dp),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
-                                Text("Convert Branch", fontSize = 11.sp, color = Color.Black, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-                        HorizontalDivider(color = Color(0xFF1E222D), thickness = 0.8.dp)
-                        Spacer(Modifier.height(10.dp))
-
-                        // Properties List
-                        if (selectedInstance.properties.isEmpty()) {
-                            Text("No additional properties stored", fontSize = 11.sp, color = SubtleGray)
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                selectedInstance.properties.forEach { (k, v) ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text(k, fontSize = 11.sp, color = MutedGray, fontFamily = FontFamily.Monospace)
-                                        Text(v, fontSize = 11.sp, color = StarkWhite, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
     }
 }
 
 @Composable
-private fun ExplorerRowItem(
-    instance: RobloxInstance,
+private fun VfxTreeRow(
+    node: VfxTreeNode,
     isSelected: Boolean,
-    onClick: () -> Unit
+    isChecked: Boolean,
+    onSelect: () -> Unit,
+    onToggleCheck: () -> Unit,
+    onNavigateInto: () -> Unit
 ) {
-    val bg = if (isSelected) Color(0xFF171B26) else Color(0xFF0A0C11)
+    val isFolder = node.isFolderLike()
+    val bg = if (isSelected) Color(0xFF171B26) else Color(0xFF090B10)
     val border = if (isSelected) Color(0xFF38BDF8) else Color(0xFF161922)
 
-    val icon = when (instance.className) {
-        "ParticleEmitter" -> Icons.Default.Grain
-        "MeshPart", "SpecialMesh" -> Icons.Default.Category
-        "Camera" -> Icons.Default.Videocam
-        "Sound" -> Icons.AutoMirrored.Filled.VolumeUp
-        "Attachment" -> Icons.Default.Adjust
-        "Model" -> Icons.Default.FolderSpecial
-        "Folder" -> Icons.Default.Folder
-        else -> Icons.Default.DataObject
+    val dotColor = when {
+        isFolder -> Color(0xFFFFFFFF)
+        node.className.contains("Mesh", ignoreCase = true) -> Color(0xFF38BDF8)
+        node.className.contains("Camera", ignoreCase = true) -> Color(0xFFA855F7)
+        node.className.contains("Sound", ignoreCase = true) -> Color(0xFF22C55E)
+        else -> Color(0xFFF43F5E) // Particle
     }
 
-    val iconTint = when (instance.className) {
-        "ParticleEmitter" -> Color(0xFFF43F5E)
-        "MeshPart", "SpecialMesh" -> Color(0xFF38BDF8)
-        "Camera" -> Color(0xFFA855F7)
-        "Sound" -> Color(0xFF22C55E)
-        else -> Color(0xFF94A3B8)
-    }
+    val bits = mutableListOf<String>()
+    if (node.particles.isNotEmpty()) bits.add("${node.particles.size}pe")
+    if (node.meshes.isNotEmpty()) bits.add("${node.meshes.size}mesh")
+    if (node.cameras.isNotEmpty()) bits.add("${node.cameras.size}cam")
+    if (node.sounds.isNotEmpty()) bits.add("${node.sounds.size}sfx")
+    val metaText = if (bits.isNotEmpty()) bits.joinToString(" · ") else if (node.count > 0) "${node.count}" else ""
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(bg)
-            .border(BorderStroke(1.dp, border), RoundedCornerShape(12.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .border(BorderStroke(1.dp, border), RoundedCornerShape(10.dp))
+            .clickable {
+                onSelect()
+                if (isFolder) {
+                    onNavigateInto()
+                }
+            }
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconTint,
-            modifier = Modifier.size(18.dp)
+        // Checkbox for multi-selection (matches app.js checkbox)
+        Checkbox(
+            checked = isChecked,
+            onCheckedChange = { onToggleCheck() },
+            colors = CheckboxDefaults.colors(
+                checkedColor = Color(0xFF38BDF8),
+                uncheckedColor = Color(0xFF384357),
+                checkmarkColor = Color.Black
+            ),
+            modifier = Modifier.size(24.dp)
         )
+
+        Spacer(Modifier.width(8.dp))
+
+        // Color Dot
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(dotColor)
+        )
+
         Spacer(Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
+
+        // Name
+        Text(
+            text = node.name,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = StarkWhite,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+
+        // Meta tag
+        if (metaText.isNotEmpty()) {
             Text(
-                text = instance.name,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = StarkWhite,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = instance.className,
-                fontSize = 10.sp,
-                color = MutedGray,
-                fontFamily = FontFamily.Monospace
-            )
-        }
-        if (instance.children.isNotEmpty()) {
-            Text(
-                text = "${instance.children.size}",
+                text = metaText,
                 fontSize = 11.sp,
-                color = SubtleGray,
+                color = MutedGray,
+                fontFamily = FontFamily.Monospace,
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
-                    .background(Color(0xFF141720))
+                    .background(Color(0xFF12151E))
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             )
         }
-    }
-}
 
-private fun flattenTree(root: RobloxInstance): List<RobloxInstance> {
-    val list = mutableListOf<RobloxInstance>()
-    fun traverse(inst: RobloxInstance) {
-        list.add(inst)
-        inst.children.forEach { traverse(it) }
+        if (isFolder) {
+            Spacer(Modifier.width(6.dp))
+            Icon(Icons.Default.ChevronRight, contentDescription = "Enter", tint = MutedGray, modifier = Modifier.size(16.dp))
+        }
     }
-    traverse(root)
-    return list
 }

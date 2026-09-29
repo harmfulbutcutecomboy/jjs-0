@@ -321,6 +321,20 @@ fun ConvertScreen(
                 }
             }
 
+            // CONVERT ACTION BUTTON
+            item {
+                Button(
+                    onClick = { viewModel.exportCurrentTargets() },
+                    colors = ButtonDefaults.buttonColors(containerColor = StarkWhite),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("convert_current_targets_btn")
+                ) {
+                    Icon(Icons.Default.AutoFixHigh, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("CONVERT CURRENT TARGETS TO JJS", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                }
+            }
+
             // OUTPUT CARDS
             item {
                 MonospaceCodeCard(

@@ -2,6 +2,8 @@ package com.jjs.studio.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jjs.studio.model.VfxTreeNode
+import com.jjs.studio.parser.RobloxPlaceParser
 import com.jjs.studio.model.JjsNode
 import com.jjs.studio.model.JjsSkill
 import com.jjs.studio.model.NodeKind
@@ -43,6 +45,11 @@ data class JjsUiState(
     val selectedNodeId: String? = null,
     val explorerRoot: RobloxInstance? = null,
     val selectedExplorerInstanceId: String? = null,
+    val vfxTreeRoot: VfxTreeNode? = null,
+    val browseId: String = "root",
+    val vfxNodeMap: Map<String, VfxTreeNode> = emptyMap(),
+    val selectedVfxNodeId: String? = null,
+    val checkedVfxNodeIds: Set<String> = emptySet(),
     val explorerSearch: String = "",
     val loadedFileName: String? = null,
     val queuedFiles: List<QueuedRobloxFile> = emptyList(),
@@ -276,6 +283,38 @@ class JjsViewModel : ViewModel() {
         recomputeExports()
     }
 
+    fun detectPaletteFromNodes(particles: List<JjsNode>) {
+        val colorCounts = mutableMapOf<RgbColor, Int>()
+        for (p in particles) {
+            val rgbs = parseRgbList(p.color)
+            for (c in rgbs) {
+                if (c.r + c.g + c.b > 12) {
+                    colorCounts[c] = (colorCounts[c] ?: 0) + 1
+                }
+            }
+        }
+        val sorted = colorCounts.entries.sortedByDescending { it.value }.map { it.key }
+        if (sorted.isNotEmpty()) {
+            val main = sorted[0]
+            val accent = sorted.getOrNull(1) ?: main
+            val other = sorted.getOrNull(2) ?: RgbColor(255, 255, 255)
+            val detected = Palette(main = main, accent = accent, other = other)
+            _uiState.update { it.copy(detectedPalette = detected) }
+        }
+    }
+
+    private fun parseRgbList(str: String): List<RgbColor> {
+        val out = mutableListOf<RgbColor>()
+        val regex = Regex("""(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})""")
+        regex.findAll(str).forEach { m ->
+            val r = m.groupValues[1].toIntOrNull() ?: 255
+            val g = m.groupValues[2].toIntOrNull() ?: 255
+            val b = m.groupValues[3].toIntOrNull() ?: 255
+            out.add(RgbColor(r, g, b))
+        }
+        return out
+    }
+
     fun updateTargetPalette(main: RgbColor? = null, accent: RgbColor? = null, other: RgbColor? = null) {
         _uiState.update { state ->
             val curr = state.targetPalette
@@ -418,23 +457,29 @@ class JjsViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 showStatus("Parsing ${files.size} file(s)...")
-                val root = RobloxInstance(name = "Workspace", className = "Workspace")
+                val root = VfxTreeNode(id = "root", name = "Workspace", className = "Folder", type = "ParticleFolder")
                 for ((fileName, bytes) in files) {
-                    val parsed = RobloxFileParser.parse(bytes, fileName, cameras, meshes)
+                    val parsed = RobloxPlaceParser.parse(bytes, fileName, cameras, meshes)
+                    parsed.parentId = "root"
                     root.children.add(parsed)
                 }
+                val nodeMap = mutableMapOf<String, VfxTreeNode>()
+                indexVfxTree(root, nodeMap)
+                val totalParticles = root.collectAllParticles().size
+                val totalCameras = root.collectAllCameras().size
+                val totalMeshes = root.collectAllMeshes().size
+
                 _uiState.update {
                     it.copy(
-                        explorerRoot = root,
+                        vfxTreeRoot = root,
+                        browseId = "root",
+                        vfxNodeMap = nodeMap,
+                        selectedVfxNodeId = root.children.firstOrNull()?.id ?: "root",
                         loadedFileName = if (files.size == 1) files[0].first else "${files.size} Files",
-                        selectedExplorerInstanceId = null,
                         currentScreen = AppScreen.EXPLORER
                     )
                 }
-                val totalParticles = root.findDescendantsByClass("ParticleEmitter").size
-                val totalCameras = root.findDescendantsByClass("Camera").size
-                val totalMeshes = root.findDescendantsByClass("MeshPart").size + root.findDescendantsByClass("SpecialMesh").size
-                showStatus("Loaded ${files.size} file(s) • $totalParticles Particles • $totalCameras Cameras • $totalMeshes Meshes")
+                showStatus("Loaded ${files.size} files • $totalParticles Particles • $totalCameras Cameras • $totalMeshes Meshes")
             } catch (e: Exception) {
                 showStatus("Parse error: ${e.message}")
             }
@@ -447,27 +492,142 @@ class JjsViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 showStatus("Parsing $fileName (${bytes.size / 1024} KB)...")
-                val root = RobloxFileParser.parse(bytes, fileName, cameras, meshes)
+                val parsed = RobloxPlaceParser.parse(bytes, fileName, cameras, meshes)
+                val nodeMap = mutableMapOf<String, VfxTreeNode>()
+                indexVfxTree(parsed, nodeMap)
+                val totalParticles = parsed.collectAllParticles().size
+                val totalCameras = parsed.collectAllCameras().size
+                val totalMeshes = parsed.collectAllMeshes().size
+
                 _uiState.update {
                     it.copy(
-                        explorerRoot = root,
+                        vfxTreeRoot = parsed,
+                        browseId = "root",
+                        vfxNodeMap = nodeMap,
+                        selectedVfxNodeId = parsed.children.firstOrNull()?.id ?: "root",
                         loadedFileName = fileName,
-                        selectedExplorerInstanceId = null
+                        currentScreen = AppScreen.EXPLORER
                     )
                 }
-
-                val particles = root.findDescendantsByClass("ParticleEmitter")
-                val foundMeshes = root.findDescendantsByClass("MeshPart") + root.findDescendantsByClass("SpecialMesh")
-                val foundCameras = root.findDescendantsByClass("Camera")
-                val sounds = root.findDescendantsByClass("Sound")
-                val totalFx = particles.size + foundMeshes.size + foundCameras.size + sounds.size
-
-                showStatus("Opened $fileName: $totalFx FX found (${particles.size} Particles, ${foundCameras.size} Cameras, ${foundMeshes.size} Meshes)")
-                _uiState.update { it.copy(currentScreen = AppScreen.EXPLORER) }
+                showStatus("Opened $fileName: $totalParticles Particles • $totalCameras Cameras • $totalMeshes Meshes")
             } catch (e: Exception) {
                 showStatus("Error parsing Roblox file: ${e.localizedMessage}")
             }
         }
+    }
+
+    fun navigateToVfxNode(id: String) {
+        _uiState.update { it.copy(browseId = id) }
+    }
+
+    fun navigateUpVfxTree() {
+        val currentBrowseId = _uiState.value.browseId
+        val parentId = _uiState.value.vfxNodeMap[currentBrowseId]?.parentId ?: "root"
+        _uiState.update { it.copy(browseId = parentId) }
+    }
+
+    fun selectVfxNode(id: String) {
+        val node = _uiState.value.vfxNodeMap[id]
+        _uiState.update {
+            it.copy(
+                selectedVfxNodeId = id,
+                selectedExplorerInstanceId = id
+            )
+        }
+        if (node != null) {
+            val particles = node.collectAllParticles()
+            if (particles.isNotEmpty()) {
+                detectPaletteFromNodes(particles)
+            }
+        }
+    }
+
+    fun toggleCheckVfxNode(id: String) {
+        _uiState.update {
+            val set = it.checkedVfxNodeIds.toMutableSet()
+            if (set.contains(id)) set.remove(id) else set.add(id)
+            it.copy(checkedVfxNodeIds = set)
+        }
+    }
+
+    private fun indexVfxTree(node: VfxTreeNode, map: MutableMap<String, VfxTreeNode>) {
+        map[node.id] = node
+        for (child in node.children) {
+            indexVfxTree(child, map)
+        }
+    }
+
+    fun exportCurrentTargets() {
+        val root = _uiState.value.vfxTreeRoot ?: return
+        val map = _uiState.value.vfxNodeMap
+        val checked = _uiState.value.checkedVfxNodeIds
+        val selectedId = _uiState.value.selectedVfxNodeId
+        val state = _uiState.value
+
+        val targets = when {
+            checked.isNotEmpty() -> checked.mapNotNull { map[it] }
+            selectedId != null && map[selectedId] != null -> listOf(map[selectedId]!!)
+            else -> listOf(root)
+        }
+
+        if (targets.isEmpty()) {
+            showStatus("Nothing selected to convert")
+            return
+        }
+
+        val skillList = mutableListOf<JjsSkill>()
+
+        if (state.packMode && state.branchMode) {
+            val skill = JjsSkill(name = state.skillName.ifBlank { "Converted_Pack" }, key = state.skillKey)
+            var defaultDone = false
+            targets.forEachIndexed { idx, target ->
+                val lines = mutableListOf<JjsNode>()
+                lines.addAll(target.collectAllParticles())
+                lines.addAll(target.collectAllMeshes())
+                lines.addAll(target.collectAllCameras())
+                lines.addAll(target.collectAllSounds())
+                if (lines.isNotEmpty()) {
+                    if (!defaultDone) {
+                        skill.branches["Default"] = lines
+                        defaultDone = true
+                    } else {
+                        val bName = target.name.ifBlank { "Branch_${idx + 1}" }
+                        skill.branches[bName] = lines
+                    }
+                }
+            }
+            skillList.add(skill)
+        } else {
+            targets.forEachIndexed { idx, target ->
+                val lines = mutableListOf<JjsNode>()
+                lines.addAll(target.collectAllParticles())
+                lines.addAll(target.collectAllMeshes())
+                lines.addAll(target.collectAllCameras())
+                lines.addAll(target.collectAllSounds())
+                if (lines.isNotEmpty()) {
+                    val sName = if (targets.size == 1) state.skillName.ifBlank { target.name } else target.name
+                    val sk = JjsSkill(name = sName, key = state.skillKey + idx)
+                    sk.branches["Default"] = lines
+                    skillList.add(sk)
+                }
+            }
+        }
+
+        if (skillList.isEmpty()) {
+            showStatus("No VFX nodes found in selection")
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                skills = skillList,
+                currentSkillIndex = 0,
+                currentBranch = "Default",
+                currentScreen = AppScreen.HOME
+            )
+        }
+        recomputeExports()
+        showStatus("Converted ${skillList.size} skill(s) successfully!")
     }
 
     fun convertAllExplorerFxToSkill() {
